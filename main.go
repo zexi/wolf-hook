@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
+
 	"github.com/zexi/wolf-hook/pkg/handlers"
+	"github.com/zexi/wolf-hook/pkg/util/procutils"
+
 	"yunion.io/x/log"
 )
 
@@ -24,6 +28,8 @@ func init() {
 
 func main() {
 	log.Infof("============= WOLF HOOK ==========")
+	go procutils.WaitZombieLoop(context.Background())
+
 	srv := &http.Server{
 		Handler:      getHandler(),
 		Addr:         fmt.Sprintf("%s:%d", addr, port),
@@ -38,6 +44,8 @@ func main() {
 
 func getHandler() http.Handler {
 	r := mux.NewRouter()
-	r.Handle("/hook/start", handlers.NewStartController())
+	r.Handle("/hook/start", handlers.NewStartController()).Methods("POST")
+	r.Handle("/hook/stop", handlers.NewStopController()).Methods("POST")
+	r.Handle("/hook/status", handlers.NewGetStatusController()).Methods("GET")
 	return r
 }

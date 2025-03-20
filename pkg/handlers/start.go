@@ -36,8 +36,10 @@ func (s startController) ServeHTTP(w http.ResponseWriter, request *http.Request)
 		return
 	}
 	go func() {
+		SetState(STATE_RUNNING)
 		if err := s.launchApp(params); err != nil {
 			log.Errorf("launch app failed: %v", err)
+			SetState(STATE_ERROR)
 		}
 	}()
 	log.Printf("======get start params: %+v", params)
