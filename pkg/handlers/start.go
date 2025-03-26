@@ -48,7 +48,44 @@ func (s startController) ServeHTTP(w http.ResponseWriter, request *http.Request)
 	return
 }
 
+// setupUdevControl 创建并设置 udev control 文件和目录
+func (s startController) setupUdevControl() error {
+	udevDir := "/run/udev"
+	udevDataDir := "/run/udev/data"
+	controlFile := "/run/udev/control"
+
+	// 确保 udev 目录存在
+	if err := os.MkdirAll(udevDir, 0777); err != nil {
+		log.Errorf("创建目录 %s 失败: %v", udevDir, err)
+		return errors.Wrap(err, "创建 udev 目录失败")
+	}
+
+	// 创建 data 目录
+	if err := os.MkdirAll(udevDataDir, 0777); err != nil {
+		log.Errorf("创建目录 %s 失败: %v", udevDataDir, err)
+		return errors.Wrap(err, "创建 udev data 目录失败")
+	}
+
+	// 创建 control 文件
+	if _, err := os.Create(controlFile); err != nil {
+		log.Errorf("创建文件 %s 失败: %v", controlFile, err)
+		return errors.Wrap(err, "创建 control 文件失败")
+	}
+
+	// 设置文件权限为 777
+	if err := os.Chmod(controlFile, 0777); err != nil {
+		log.Errorf("设置文件 %s 权限失败: %v", controlFile, err)
+		return errors.Wrap(err, "设置 control 文件权限失败")
+	}
+	return nil
+}
+
 func (s startController) launchApp(params *StartParams) error {
+	// 设置 udev control 文件
+	if err := s.setupUdevControl(); err != nil {
+		return errors.Wrap(err, "设置 udev control 文件失败")
+	}
+
 	cmd := exec.Command(GOW_STARTUP_APP_SH)
 	cmd.Env = os.Environ()
 	for k, v := range params.Envs {
