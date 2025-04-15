@@ -72,4 +72,6 @@ func (s *stopController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			log.Errorf("终止其他进程时发生错误: %v", err)
 		}
 	}()
+	log.Infof("======exit code 123")
+	os.Exit(123)
 }

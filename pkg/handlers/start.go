@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"yunion.io/x/log"
 	"yunion.io/x/pkg/errors"
@@ -108,7 +109,32 @@ func (s startController) launchApp(params *StartParams) error {
 		log.Errorf("start app failed: %v", err)
 		return errors.Wrap(err, "start app failed")
 	}
+
+	// 启动 goroutine 检查 sway 进程
+	go func() {
+		for {
+			// 检查是否有 sway 进程
+			if !isSwayRunning() {
+				log.Infof("未检测到 sway 进程，5 秒后退出程序")
+				time.Sleep(2 * time.Second)
+				log.Infof("退出程序")
+				os.Exit(134)
+			}
+			// 每隔一段时间检查一次
+			time.Sleep(3 * time.Second)
+		}
+	}()
+
 	return nil
+}
+
+// isSwayRunning 检查系统中是否有 sway 进程
+func isSwayRunning() bool {
+	cmd := exec.Command("pgrep", "sway")
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return true
 }
 
 /*func (s startController) launchExecApp(params *StartParams) error {
