@@ -181,10 +181,12 @@ func (m *MoonlightInput) MouseButton(button uint8, isPress bool) []byte {
 // KeyboardKey 构造键盘按键数据包
 func (m *MoonlightInput) KeyboardKey(keyCode uint16, modifiers uint16, isPress bool) []byte {
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, uint8(0))  // flags
-	binary.Write(buf, binary.BigEndian, keyCode)   // key_code
-	binary.Write(buf, binary.BigEndian, modifiers) // modifiers
-	binary.Write(buf, binary.BigEndian, uint16(0)) // zero1
+	// 键盘按键数据包格式：
+	// flags (1 byte) + key_code (2 bytes) + modifiers (2 bytes) + zero1 (2 bytes)
+	binary.Write(buf, binary.BigEndian, uint8(0))   // flags
+	binary.Write(buf, binary.LittleEndian, keyCode) // key_code
+	binary.Write(buf, binary.BigEndian, modifiers)  // modifiers
+	binary.Write(buf, binary.BigEndian, uint16(0))  // zero1
 
 	data := buf.Bytes()
 	inputType := KeyPress
