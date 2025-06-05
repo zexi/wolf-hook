@@ -9,6 +9,8 @@ require (
 )
 
 require (
+	github.com/Philipp15b/go-steam/v3 v3.0.0 // indirect
+	github.com/andygrunwald/vdf v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/mattn/go-colorable v0.1.9 // indirect
@@ -20,4 +22,5 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
+	google.golang.org/protobuf v1.27.1 // indirect
 )
