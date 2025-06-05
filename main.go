@@ -72,5 +72,6 @@ func getHandler() http.Handler {
 	r.Handle("/hook/exec", handlers.NewExecController()).Methods("POST")
 	r.Handle("/hook/write-hwdb", handlers.NewWriteHwdbController()).Methods("POST")
 	r.Handle("/steam/owned-games", handlers.NewSteamOwnedGamesController()).Methods("GET")
+	r.Handle("/steam/game-name", handlers.NewGetGameNameController()).Methods("GET")
 	return r
 }

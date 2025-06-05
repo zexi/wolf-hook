@@ -155,3 +155,56 @@ func (c *SteamOwnedGamesController) ServeHTTP(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+// GetGameNameController 处理获取游戏名称的请求
+type GetGameNameController struct{}
+
+func (c *GetGameNameController) WriteError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func (c *GetGameNameController) WriteJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (c *GetGameNameController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	appID := r.URL.Query().Get("appId")
+	if appID == "" {
+		c.WriteError(w, http.StatusBadRequest, "appId is required")
+		return
+	}
+
+	// 调用 Steam Web API 获取游戏信息
+	url := fmt.Sprintf("https://store.steampowered.com/api/appdetails?appids=%s", appID)
+	resp, err := http.Get(url)
+	if err != nil {
+		c.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get game info: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	var result map[string]struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("failed to decode response: %v", err))
+		return
+	}
+
+	gameInfo, ok := result[appID]
+	if !ok || !gameInfo.Success {
+		c.WriteError(w, http.StatusNotFound, "game not found")
+		return
+	}
+
+	c.WriteJSON(w, map[string]string{
+		"name": gameInfo.Data.Name,
+	})
+}
