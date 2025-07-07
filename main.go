@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"yunion.io/x/pkg/errors"
 
 	"github.com/zexi/wolf-hook/pkg/handlers"
+	"github.com/zexi/wolf-hook/pkg/moonlight/client"
 	"github.com/zexi/wolf-hook/pkg/util/procutils"
 
 	"yunion.io/x/log"
@@ -22,6 +25,7 @@ var (
 	port             int
 	ulimitNofileHard int
 	ulimitNofileSoft int
+	autoStart        bool
 )
 
 func init() {
@@ -29,7 +33,96 @@ func init() {
 	flag.IntVar(&port, "port", 8080, "HTTP server listen port")
 	flag.IntVar(&ulimitNofileHard, "ulimit-nofile-hard", 10240, "ulimit nofile hard")
 	flag.IntVar(&ulimitNofileSoft, "ulimit-nofile-soft", 10240, "ulimit nofile soft")
+	flag.BoolVar(&autoStart, "auto-start", false, "auto start moonlight client after HTTP server starts")
 	flag.Parse()
+}
+
+// getConfigFromEnv 从环境变量获取 Moonlight 配置
+func getConfigFromEnv() (string, int, string) {
+	// 从环境变量读取服务器IP，默认为 220.196.214.104
+	hostIP := os.Getenv("CLOUDPODS_HOST_EIP")
+	if hostIP == "" {
+		hostIP = os.Getenv("CLOUDPODS_HOST_ACCESS_IP")
+		if hostIP == "" {
+			hostIP = "220.196.214.104"
+		}
+	}
+
+	// 从环境变量读取HTTP端口，默认为 20008
+	httpPortStr := os.Getenv("WOLF_HTTP_PORT")
+	httpPort := 20008
+	if httpPortStr != "" {
+		if port, err := strconv.Atoi(httpPortStr); err == nil {
+			httpPort = port
+		}
+	}
+
+	// 从环境变量读取客户端ID，默认为 go_client_001
+	clientID := os.Getenv("WOLF_CLIENT_ID")
+	if clientID == "" {
+		clientID = "go_client_001"
+	}
+
+	return hostIP, httpPort, clientID
+}
+
+// startMoonlightClient 启动 Moonlight 客户端
+func startMoonlightClient() error {
+	log.Infof("============= 启动 Moonlight 客户端 ==========")
+
+	// 从环境变量获取配置
+	hostIP, httpPort, clientID := getConfigFromEnv()
+	log.Infof("Moonlight 配置: 服务器IP=%s, HTTP端口=%d, 客户端ID=%s", hostIP, httpPort, clientID)
+
+	// 创建客户端
+	moonlightClient := client.NewMoonlightClient(hostIP, httpPort, clientID)
+
+	// 执行配对
+	log.Infof("开始配对流程...")
+	if err := moonlightClient.PairAndConnect(); err != nil {
+		return errors.Wrap(err, "配对失败")
+	}
+	log.Infof("配对成功！")
+
+	// 获取服务器信息
+	serverInfo, err := moonlightClient.GetServerInfo()
+	if err != nil {
+		return errors.Wrap(err, "获取服务器信息失败")
+	} else {
+		log.Infof("服务器信息: 主机名=%s, 版本=%s, 状态=%s", serverInfo.Hostname, serverInfo.AppVersion, serverInfo.State)
+		log.Infof("支持的显示模式数量: %d", len(serverInfo.SupportedDisplayMode.DisplayMode))
+		for i, mode := range serverInfo.SupportedDisplayMode.DisplayMode {
+			log.Infof("  模式%d: %sx%s@%sHz", i+1, mode.Width, mode.Height, mode.RefreshRate)
+		}
+	}
+
+	// 获取应用程序列表
+	appList, err := moonlightClient.GetAppList()
+	if err != nil {
+		return errors.Wrap(err, "获取应用程序列表失败")
+	}
+
+	log.Infof("应用程序列表: 共%d个应用", len(appList.Apps))
+	for _, app := range appList.Apps {
+		log.Infof("  应用: ID=%s, 标题=%s, HDR支持=%s", app.ID, app.AppTitle, app.IsHdrSupported)
+	}
+
+	// 启动第一个应用程序（如果有的话）
+	if len(appList.Apps) > 0 {
+		firstApp := appList.Apps[0]
+		log.Infof("自动启动第一个应用: %s (ID: %s)", firstApp.AppTitle, firstApp.ID)
+
+		launchResult, err := moonlightClient.LaunchApp(firstApp.ID, 1920, 1080, 60)
+		if err != nil {
+			return errors.Wrap(err, "启动应用程序失败")
+		} else {
+			log.Infof("启动成功！会话ID: %s", launchResult.SessionURL0)
+		}
+	} else {
+		return errors.Errorf("没有找到可用的应用程序")
+	}
+
+	return nil
 }
 
 func setupRlimits(hard, soft uint64) error {
@@ -58,7 +151,24 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+
 	log.Infof("Listening on %s:%d", addr, port)
+
+	// 如果启用了自动启动，在后台启动 Moonlight 客户端
+	if autoStart {
+		go func() {
+			// 等待一小段时间确保 HTTP 服务完全启动
+			for {
+				time.Sleep(1 * time.Second)
+				if err := startMoonlightClient(); err != nil {
+					log.Errorf("start moonlight client: %v", err)
+				} else {
+					break
+				}
+			}
+		}()
+	}
+
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("listen and serve: %v", err)
 	}

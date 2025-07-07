@@ -5,3 +5,6 @@ build-wolf-hook:
 
 build-wolf-input:
 	GOARCH=amd64 GOOS=linux CGO_ENABLED=0 go build -o _output/wolf-input cmd/wolf-input/main.go
+
+build-wolf-session:
+	GOARCH=amd64 GOOS=linux CGO_ENABLED=0 go build -o _output/wolf-session cmd/wolf-session/main.go
