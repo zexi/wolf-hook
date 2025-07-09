@@ -316,28 +316,32 @@ func (c *MoonlightPairingClient) parseXMLResponse(resp *http.Response) (map[stri
 	return result, nil
 }
 
+// prettyPrintXML 将结构体格式化为缩进 XML
+func prettyPrintXML(v interface{}) string {
+	data, err := xml.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "(格式化失败)"
+	}
+	return string(data)
+}
+
 // parseServerInfoResponse 解析服务器信息响应
 func (c *MoonlightPairingClient) parseServerInfoResponse(resp *http.Response) (*ServerInfo, error) {
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("读取响应体失败: %v", err)
+		return nil, err
 	}
 
-	// 记录响应内容用于调试
+	// 记录响应内容用于调试（原始输出）
 	bodyStr := string(body)
-	log.Printf("======= 服务器信息响应: %s", bodyStr)
+	log.Printf("======= 服务器信息响应(原始):\n%s", bodyStr)
 
-	// 检查响应状态码
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("服务器返回错误状态码: %d, 响应: %s", resp.StatusCode, bodyStr)
-	}
-
-	// 使用 XML 解析器解析响应
 	var serverInfo ServerInfo
 	if err := xml.Unmarshal(body, &serverInfo); err != nil {
-		return nil, fmt.Errorf("解析服务器信息 XML 失败: %v", err)
+		return nil, err
 	}
-
+	log.Printf("======= 服务器信息响应(格式化):\n%s", prettyPrintXML(serverInfo))
 	log.Printf("服务器信息解析结果: %+v", serverInfo)
 	return &serverInfo, nil
 }
