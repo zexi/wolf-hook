@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/zexi/wolf-hook/pkg/moonlight/client"
@@ -11,17 +13,52 @@ import (
 
 // 全局配置
 var (
-	hostIP     string
-	httpPort   int
+	hostPort   string
 	clientID   string
 	autoPair   bool
 	noAutoPair bool
 )
 
+// 解析 host:port 格式
+func parseHostPort(hostPort string) (string, int, error) {
+	// 默认值
+	if hostPort == "" {
+		return "220.196.214.104", 20008, nil
+	}
+
+	// 检查是否包含冒号
+	if !strings.Contains(hostPort, ":") {
+		// 只有主机名，使用默认端口
+		return hostPort, 20008, nil
+	}
+
+	// 分割 host:port
+	parts := strings.Split(hostPort, ":")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("无效的 host:port 格式: %s", hostPort)
+	}
+
+	host := parts[0]
+	portStr := parts[1]
+
+	// 解析端口
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", 0, fmt.Errorf("无效的端口号: %s", portStr)
+	}
+
+	return host, port, nil
+}
+
 // 创建并配置客户端
 func createClient() *client.MoonlightClient {
-	log.Printf("使用配置: 服务器IP=%s, HTTP端口=%d, 客户端ID=%s", hostIP, httpPort, clientID)
-	return client.NewMoonlightClient(hostIP, httpPort, clientID)
+	host, port, err := parseHostPort(hostPort)
+	if err != nil {
+		log.Fatalf("解析主机地址失败: %v", err)
+	}
+
+	log.Printf("使用配置: 服务器IP=%s, HTTP端口=%d, 客户端ID=%s", host, port, clientID)
+	return client.NewMoonlightClient(host, port, clientID)
 }
 
 // 确保客户端已配对
@@ -140,8 +177,7 @@ func main() {
 	}
 
 	// 添加全局标志
-	rootCmd.PersistentFlags().StringVar(&hostIP, "host", "220.196.214.104", "服务器IP地址")
-	rootCmd.PersistentFlags().IntVar(&httpPort, "port", 20008, "HTTP端口")
+	rootCmd.PersistentFlags().StringVar(&hostPort, "host", "220.196.214.104:20008", "服务器地址 (格式: host:port)")
 	rootCmd.PersistentFlags().StringVar(&clientID, "client-id", "go_client_001", "客户端ID")
 	rootCmd.PersistentFlags().BoolVar(&noAutoPair, "no-auto-pair", false, "禁用自动配对")
 
