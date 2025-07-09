@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -66,15 +67,36 @@ func getConfigFromEnv() (string, int, string) {
 	return hostIP, httpPort, clientID
 }
 
+// checkServerConnectivity 检查服务器IP和HTTP端口是否可达
+func checkServerConnectivity(hostIP string, httpPort int) error {
+	log.Infof("检查服务器连通性: %s:%d", hostIP, httpPort)
+
+	// 检查TCP连接
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", hostIP, httpPort), 5*time.Second)
+	if err != nil {
+		return errors.Wrapf(err, "无法连接到服务器 %s:%d", hostIP, httpPort)
+	}
+	defer conn.Close()
+
+	log.Infof("服务器连通性检查通过: %s:%d", hostIP, httpPort)
+	return nil
+}
+
 // startMoonlightClient 启动 Moonlight 客户端
 func startMoonlightClient() error {
-	log.Infof("============= 启动 Moonlight 客户端 ==========")
-
 	// 从环境变量获取配置
 	hostIP, httpPort, clientID := getConfigFromEnv()
 	log.Infof("Moonlight 配置: 服务器IP=%s, HTTP端口=%d, 客户端ID=%s", hostIP, httpPort, clientID)
 
+	// 检查服务器连通性
+	if err := checkServerConnectivity(hostIP, httpPort); err != nil {
+		return errors.Wrap(err, "服务器连通性检查失败")
+	}
+	log.Infof("等待5秒，确保服务器 pulseaudio 完全启动")
+	time.Sleep(5 * time.Second)
+
 	// 创建客户端
+	log.Infof("============= 启动 Moonlight 客户端 ==========")
 	moonlightClient := client.NewMoonlightClient(hostIP, httpPort, clientID)
 
 	// 执行配对
