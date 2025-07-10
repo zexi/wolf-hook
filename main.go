@@ -22,11 +22,12 @@ import (
 )
 
 var (
-	addr             string
-	port             int
-	ulimitNofileHard int
-	ulimitNofileSoft int
-	autoStart        bool
+	addr                string
+	port                int
+	ulimitNofileHard    int
+	ulimitNofileSoft    int
+	autoStart           bool
+	noExitWhenAppLaunch bool
 )
 
 func init() {
@@ -35,6 +36,7 @@ func init() {
 	flag.IntVar(&ulimitNofileHard, "ulimit-nofile-hard", 10240, "ulimit nofile hard")
 	flag.IntVar(&ulimitNofileSoft, "ulimit-nofile-soft", 10240, "ulimit nofile soft")
 	flag.BoolVar(&autoStart, "auto-start", false, "auto start moonlight client after HTTP server starts")
+	flag.BoolVar(&noExitWhenAppLaunch, "no-exit-when-app-launch", false, "do not exit when app launch (skip sway process monitoring)")
 	flag.Parse()
 }
 
@@ -198,7 +200,7 @@ func main() {
 
 func getHandler() http.Handler {
 	r := mux.NewRouter()
-	r.Handle("/hook/start", handlers.NewStartController()).Methods("POST")
+	r.Handle("/hook/start", handlers.NewStartController(noExitWhenAppLaunch)).Methods("POST")
 	r.Handle("/hook/stop", handlers.NewStopController()).Methods("POST")
 	r.Handle("/hook/status", handlers.NewGetStatusController()).Methods("GET")
 	r.Handle("/hook/exec", handlers.NewExecController()).Methods("POST")

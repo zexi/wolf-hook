@@ -18,10 +18,14 @@ const (
 	HOOK_ENV_FILE      = "/opt/bin/hook-env.sh"
 )
 
-type startController struct{}
+type startController struct {
+	noExitWhenAppLaunch bool
+}
 
-func NewStartController() http.Handler {
-	return new(startController)
+func NewStartController(noExitWhenAppLaunch bool) http.Handler {
+	return &startController{
+		noExitWhenAppLaunch: noExitWhenAppLaunch,
+	}
 }
 
 type StartParams struct {
@@ -110,20 +114,24 @@ func (s startController) launchApp(params *StartParams) error {
 		return errors.Wrap(err, "start app failed")
 	}
 
-	// 启动 goroutine 检查 sway 进程
-	go func() {
-		for {
-			// 检查是否有 sway 进程
-			if !isSwayRunning() {
-				log.Infof("未检测到 sway 进程，5 秒后退出程序")
-				time.Sleep(2 * time.Second)
-				log.Infof("退出程序")
-				os.Exit(134)
+	// 启动 goroutine 检查 sway 进程（如果未设置 no-exit-when-app-launch 标志）
+	if !s.noExitWhenAppLaunch {
+		go func() {
+			for {
+				// 检查是否有 sway 进程
+				if !isSwayRunning() {
+					log.Infof("未检测到 sway 进程，5 秒后退出程序")
+					time.Sleep(2 * time.Second)
+					log.Infof("退出程序")
+					os.Exit(134)
+				}
+				// 每隔一段时间检查一次
+				time.Sleep(3 * time.Second)
 			}
-			// 每隔一段时间检查一次
-			time.Sleep(3 * time.Second)
-		}
-	}()
+		}()
+	} else {
+		log.Infof("已设置 no-exit-when-app-launch 标志，跳过 sway 进程检测")
+	}
 
 	return nil
 }
