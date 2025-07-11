@@ -33,7 +33,6 @@ type StartParams struct {
 }
 
 func (s startController) ServeHTTP(w http.ResponseWriter, request *http.Request) {
-	log.Infof("=======start request recevied")
 	params := new(StartParams)
 	if err := json.NewDecoder(request.Body).Decode(params); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -85,10 +84,59 @@ func (s startController) setupUdevControl() error {
 	return nil
 }
 
+func (s startController) setupSteamDir() error {
+	// 获取 HOME 环境变量
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		return errors.Errorf("HOME 环境变量未设置")
+	}
+
+	// Steam 目录路径
+	steamDir := fmt.Sprintf("%s/.steam", homeDir)
+	debianInstallDir := fmt.Sprintf("%s/.steam/debian-installation", homeDir)
+
+	// 设置 .steam 目录权限
+	if _, err := os.Stat(steamDir); err == nil {
+		// 目录存在，设置权限
+		if err := os.Chown(steamDir, 1000, 1000); err != nil {
+			log.Errorf("设置目录 %s 权限失败: %v", steamDir, err)
+			return errors.Wrapf(err, "设置目录 %s 权限失败", steamDir)
+		}
+		log.Infof("已设置目录 %s 权限为 1000:1000", steamDir)
+	} else if os.IsNotExist(err) {
+		log.Infof("目录 %s 不存在，跳过权限设置", steamDir)
+	} else {
+		log.Errorf("检查目录 %s 时发生错误: %v", steamDir, err)
+		return errors.Wrapf(err, "检查目录 %s 失败", steamDir)
+	}
+
+	// 设置 .steam/debian-installation 目录权限
+	if _, err := os.Stat(debianInstallDir); err == nil {
+		// 目录存在，设置权限
+		if err := os.Chown(debianInstallDir, 1000, 1000); err != nil {
+			log.Errorf("设置目录 %s 权限失败: %v", debianInstallDir, err)
+			return errors.Wrapf(err, "设置目录 %s 权限失败", debianInstallDir)
+		}
+		log.Infof("已设置目录 %s 权限为 1000:1000", debianInstallDir)
+	} else if os.IsNotExist(err) {
+		log.Infof("目录 %s 不存在，跳过权限设置", debianInstallDir)
+	} else {
+		log.Errorf("检查目录 %s 时发生错误: %v", debianInstallDir, err)
+		return errors.Wrapf(err, "检查目录 %s 失败", debianInstallDir)
+	}
+
+	return nil
+}
+
 func (s startController) launchApp(params *StartParams) error {
 	// 设置 udev control 文件
 	if err := s.setupUdevControl(); err != nil {
 		return errors.Wrap(err, "设置 udev control 文件失败")
+	}
+
+	// 设置 Steam 目录权限
+	if err := s.setupSteamDir(); err != nil {
+		return errors.Wrapf(err, "设置 Steam 目录权限失败")
 	}
 
 	cmd := exec.Command(GOW_STARTUP_APP_SH)
