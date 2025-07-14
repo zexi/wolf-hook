@@ -125,6 +125,72 @@ func NewMoonlightInput(socketPath string) *MoonlightInput {
 	}
 }
 
+// Session 定义会话结构体
+type Session struct {
+	AppID             string                 `json:"app_id"`
+	ClientID          string                 `json:"client_id"`
+	ClientIP          string                 `json:"client_ip"`
+	AESKey            string                 `json:"aes_key"`
+	AESIV             string                 `json:"aes_iv"`
+	RTSPFakeIP        string                 `json:"rtsp_fake_ip"`
+	VideoWidth        int                    `json:"video_width"`
+	VideoHeight       int                    `json:"video_height"`
+	VideoRefreshRate  int                    `json:"video_refresh_rate"`
+	AudioChannelCount int                    `json:"audio_channel_count"`
+	ClientSettings    map[string]interface{} `json:"client_settings"`
+}
+
+// SessionsResponse 定义会话响应结构体
+type SessionsResponse struct {
+	Success  bool      `json:"success"`
+	Sessions []Session `json:"sessions"`
+}
+
+func (m *MoonlightInput) getSession() (*SessionsResponse, error) {
+	url := fmt.Sprintf("%s/api/v1/sessions", m.baseURL)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed with status: %d", resp.StatusCode)
+	}
+
+	var response SessionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("decode response failed: %v", err)
+	}
+
+	return &response, nil
+}
+
+// GetFirstSessionID 获取第一个可用的会话ID
+func (m *MoonlightInput) GetFirstSessionID() (string, error) {
+	response, err := m.getSession()
+	if err != nil {
+		return "", fmt.Errorf("get session failed: %v", err)
+	}
+
+	if !response.Success {
+		return "", fmt.Errorf("session request not successful")
+	}
+
+	if len(response.Sessions) == 0 {
+		return "", fmt.Errorf("no active sessions found")
+	}
+
+	// 返回第一个会话的 client_id 作为会话ID
+	return response.Sessions[0].ClientID, nil
+}
+
 // createHeader 创建输入数据包的头部
 func (m *MoonlightInput) createHeader(inputType InputType, dataSize int) []byte {
 	buf := new(bytes.Buffer)
@@ -179,17 +245,18 @@ func (m *MoonlightInput) MouseButton(button uint8, isPress bool) []byte {
 }
 
 // KeyboardKey 构造键盘按键数据包
-func (m *MoonlightInput) KeyboardKey(keyCode uint16, modifiers uint16, isPress bool) []byte {
+func (m *MoonlightInput) KeyboardKey(keyCode uint16, modifiers uint8, isPress bool) []byte {
 	buf := new(bytes.Buffer)
 	// 键盘按键数据包格式：
-	// flags (1 byte) + key_code (2 bytes) + modifiers (2 bytes) + zero1 (2 bytes)
+	// flags (1 byte) + key_code (2 bytes) + modifiers (1 bytes) + zero2 (2 bytes)
 	binary.Write(buf, binary.BigEndian, uint8(0))   // flags
 	binary.Write(buf, binary.LittleEndian, keyCode) // key_code
 	binary.Write(buf, binary.BigEndian, modifiers)  // modifiers
-	binary.Write(buf, binary.BigEndian, uint16(0))  // zero1
+	binary.Write(buf, binary.BigEndian, uint16(0))  // zero2
 
 	data := buf.Bytes()
 	inputType := KeyPress
+	log.Infof("======isPress: %v", isPress)
 	if !isPress {
 		inputType = KeyRelease
 	}
@@ -290,7 +357,7 @@ func (m *MoonlightInput) SendMouseButton(sessionID string, button uint8, isPress
 }
 
 // SendKeyboardKey 发送键盘按键
-func (m *MoonlightInput) SendKeyboardKey(sessionID string, keyCode uint16, modifiers uint16, isPress bool) error {
+func (m *MoonlightInput) SendKeyboardKey(sessionID string, keyCode uint16, modifiers uint8, isPress bool) error {
 	data := m.KeyboardKey(keyCode, modifiers, isPress)
 	return m.SendInput(sessionID, data)
 }

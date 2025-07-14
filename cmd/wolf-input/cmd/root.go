@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -17,14 +18,14 @@ var (
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			// 在命令执行前初始化输入实例
 			initInput()
+			initSessionID()
 		},
 	}
 )
 
 func init() {
-	// 添加全局必选参数 session-id
-	rootCmd.PersistentFlags().StringVar(&sessionID, "session", "", "会话ID (必选)")
-	rootCmd.MarkPersistentFlagRequired("session")
+	// 添加全局可选参数 session-id
+	rootCmd.PersistentFlags().StringVar(&sessionID, "session", "", "会话ID (可选，如果不指定将自动获取第一个可用会话)")
 
 	// 添加 socket 路径参数
 	rootCmd.PersistentFlags().StringVar(&socketPath, "socket", "/tmp/wolf.sock", "Unix socket 路径")
@@ -37,6 +38,16 @@ func init() {
 	rootCmd.AddCommand(mouseScrollCmd)
 	rootCmd.AddCommand(mouseHScrollCmd)
 	rootCmd.AddCommand(textCmd)
+}
+
+func initSessionID() {
+	if sessionID == "" {
+		var err error
+		sessionID, err = getInput().GetFirstSessionID()
+		if err != nil {
+			log.Fatalf("自动获取会话ID失败: %v", err)
+		}
+	}
 }
 
 // Execute 执行根命令

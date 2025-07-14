@@ -11,7 +11,8 @@ var keyboardCmd = &cobra.Command{
 		keyCode, _ := cmd.Flags().GetInt("key-code")
 		modifiers, _ := cmd.Flags().GetInt("modifiers")
 		isPress, _ := cmd.Flags().GetBool("press")
-		return getInput().SendKeyboardKey(sessionID, uint16(keyCode), uint16(modifiers), isPress)
+
+		return getInput().SendKeyboardKey(sessionID, uint16(keyCode), uint8(modifiers), isPress)
 	},
 }
 

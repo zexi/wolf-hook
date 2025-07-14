@@ -9,6 +9,7 @@ var textCmd = &cobra.Command{
 	Short: "发送文本输入事件",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		text, _ := cmd.Flags().GetString("text")
+
 		return getInput().SendUTF8Text(sessionID, text)
 	},
 }

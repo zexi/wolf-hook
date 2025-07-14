@@ -43,13 +43,14 @@ func init() {
 // getConfigFromEnv 从环境变量获取 Moonlight 配置
 func getConfigFromEnv() (string, int, string) {
 	// 从环境变量读取服务器IP，默认为 220.196.214.104
-	hostIP := os.Getenv("CLOUDPODS_HOST_EIP")
+	hostIP := "127.0.0.1"
+	/*hostIP := os.Getenv("CLOUDPODS_HOST_EIP")
 	if hostIP == "" {
 		hostIP = os.Getenv("CLOUDPODS_HOST_ACCESS_IP")
 		if hostIP == "" {
 			hostIP = "220.196.214.104"
 		}
-	}
+	}*/
 
 	// 从环境变量读取HTTP端口，默认为 20008
 	httpPortStr := os.Getenv("WOLF_HTTP_PORT")
