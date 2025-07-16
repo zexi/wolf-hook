@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/andygrunwald/vdf"
+	"github.com/zexi/wolf-hook/pkg/util/vdfutil"
 	"yunion.io/x/log"
 	"yunion.io/x/pkg/errors"
 )
@@ -20,11 +23,13 @@ const (
 
 type startController struct {
 	noExitWhenAppLaunch bool
+	setupSteamConfig    bool // 新增字段
 }
 
-func NewStartController(noExitWhenAppLaunch bool) http.Handler {
+func NewStartController(noExitWhenAppLaunch, setupSteamConfig bool) http.Handler {
 	return &startController{
 		noExitWhenAppLaunch: noExitWhenAppLaunch,
+		setupSteamConfig:    setupSteamConfig,
 	}
 }
 
@@ -128,6 +133,78 @@ func (s startController) setupSteamDir() error {
 	return nil
 }
 
+func getVdfData(configFile string) (map[string]interface{}, error) {
+	file, err := os.Open(configFile)
+	if err != nil {
+		return nil, errors.Wrapf(err, "打开文件 %s 失败", configFile)
+	}
+	defer file.Close()
+	parser := vdf.NewParser(file)
+	data, err := parser.Parse()
+	if err != nil {
+		return nil, errors.Wrapf(err, "解析文件 %s 失败", configFile)
+	}
+	log.Infof("Steam 默认配置文件 %s 解析成功", configFile)
+	return data, nil
+}
+
+func saveVdfData(configFile string, data map[string]interface{}) error {
+	content, err := vdfutil.ConvertToVdf(data)
+	if err != nil {
+		return errors.Wrapf(err, "转换数据 %v 失败", data)
+	}
+	if err := os.WriteFile(configFile, []byte(content), 0777); err != nil {
+		return errors.Wrapf(err, "保存文件 %s 失败", configFile)
+	}
+	return nil
+}
+
+func (s startController) setupSteamDefaultConfig() error {
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		return errors.Errorf("HOME 环境变量未设置")
+	}
+
+	steamDir := fmt.Sprintf("%s/.steam", homeDir)
+	debianInstallDir := fmt.Sprintf("%s/debian-installation", steamDir)
+	configFile := filepath.Join(debianInstallDir, "config", "config.vdf")
+	if _, err := os.Stat(configFile); err == nil {
+		log.Infof("Steam 默认配置文件 %s 已存在", configFile)
+	} else if os.IsNotExist(err) {
+		log.Infof("Steam 默认配置文件 %s 不存在，跳过配置", configFile)
+		return nil
+	} else {
+		return errors.Wrapf(err, "检查文件 %s 失败", configFile)
+	}
+
+	data, err := getVdfData(configFile)
+	if err != nil {
+		return errors.Wrapf(err, "获取 Steam 默认配置文件 %s 失败", configFile)
+	}
+
+	configStore := data["InstallConfigStore"].(map[string]interface{})
+	if configStore == nil {
+		return errors.Errorf("Steam 默认配置文件 %s 中没有 InstallConfigStore 节点", configFile)
+	}
+	bigPicture, ok := configStore["BigPicture"].(map[string]interface{})
+	if !ok {
+		bigPicture = map[string]interface{}{
+			"Windowed": "1",
+		}
+	} else {
+		bigPicture["Windowed"] = "1"
+	}
+	configStore["BigPicture"] = bigPicture
+	data["InstallConfigStore"] = configStore
+
+	if err := saveVdfData(configFile, data); err != nil {
+		return errors.Wrapf(err, "保存 Steam 默认配置文件 %s 失败", configFile)
+	}
+	log.Infof("Steam 默认配置文件 %s 配置成功", configFile)
+
+	return nil
+}
+
 func (s startController) launchApp(params *StartParams) error {
 	// 设置 udev control 文件
 	if err := s.setupUdevControl(); err != nil {
@@ -137,6 +214,12 @@ func (s startController) launchApp(params *StartParams) error {
 	// 设置 Steam 目录权限
 	if err := s.setupSteamDir(); err != nil {
 		return errors.Wrapf(err, "设置 Steam 目录权限失败")
+	}
+	// 配置 Steam 默认配置文件（仅在 setupSteamConfig 为 true 时执行）
+	if s.setupSteamConfig {
+		if err := s.setupSteamDefaultConfig(); err != nil {
+			return errors.Wrapf(err, "设置 Steam 默认配置文件失败")
+		}
 	}
 
 	cmd := exec.Command(GOW_STARTUP_APP_SH)

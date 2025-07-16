@@ -28,6 +28,7 @@ var (
 	ulimitNofileSoft    int
 	autoStart           bool
 	noExitWhenAppLaunch bool
+	setupSteamConfig    bool // 新增参数
 )
 
 func init() {
@@ -37,6 +38,7 @@ func init() {
 	flag.IntVar(&ulimitNofileSoft, "ulimit-nofile-soft", 10240, "ulimit nofile soft")
 	flag.BoolVar(&autoStart, "auto-start", false, "auto start moonlight client after HTTP server starts")
 	flag.BoolVar(&noExitWhenAppLaunch, "no-exit-when-app-launch", false, "do not exit when app launch (skip sway process monitoring)")
+	flag.BoolVar(&setupSteamConfig, "setup-steam-config", false, "setup steam default config before launch app") // 新增参数
 	flag.Parse()
 }
 
@@ -95,8 +97,8 @@ func startMoonlightClient() error {
 	if err := checkServerConnectivity(hostIP, httpPort); err != nil {
 		return errors.Wrap(err, "服务器连通性检查失败")
 	}
-	log.Infof("等待5秒，确保服务器 pulseaudio 完全启动")
-	time.Sleep(5 * time.Second)
+	// log.Infof("等待5秒，确保服务器 pulseaudio 完全启动")
+	// time.Sleep(5 * time.Second)
 
 	// 创建客户端
 	log.Infof("============= 启动 Moonlight 客户端 ==========")
@@ -201,7 +203,7 @@ func main() {
 
 func getHandler() http.Handler {
 	r := mux.NewRouter()
-	r.Handle("/hook/start", handlers.NewStartController(noExitWhenAppLaunch)).Methods("POST")
+	r.Handle("/hook/start", handlers.NewStartController(noExitWhenAppLaunch, setupSteamConfig)).Methods("POST") // 传递参数
 	r.Handle("/hook/stop", handlers.NewStopController()).Methods("POST")
 	r.Handle("/hook/status", handlers.NewGetStatusController()).Methods("GET")
 	r.Handle("/hook/exec", handlers.NewExecController()).Methods("POST")
